@@ -163,9 +163,13 @@ export default function Home() {
         {/* The Live Queue */}
         <div className="bg-gray-800 p-6 rounded-lg shadow-lg h-fit">
           <div className="flex justify-between items-center mb-4">
-             <h2 className="text-2xl font-bold">Live Queue</h2>
-             {adminPassword && <span className="text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded border border-red-500">Admin Mode Active</span>}
-          </div>
+             <h2 className="text-2xl font-bold">Live Queue ({queue.length})</h2>
+             <div className="flex items-center gap-2">
+               <span className="text-xs bg-gray-700 text-gray-200 px-2 py-1 rounded border border-gray-600">
+                 Total in list: {queue.length}
+               </span>
+               {adminPassword && <span className="text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded border border-red-500">Admin Mode Active</span>}
+             </div>
           
           <div className="flex flex-col gap-3">
             {queue.length === 0 && <p className="text-gray-400 italic">Queue is empty. Be the first!</p>}
