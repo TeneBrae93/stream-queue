@@ -167,8 +167,11 @@ export default function Home() {
         {/* The Live Queue */}
         <div className="bg-gray-800 p-6 rounded-lg shadow-lg h-fit">
           <div className="flex justify-between items-center mb-4">
-             <h2 className="text-2xl font-bold">Live Queue</h2>
+             <h2 className="text-2xl font-bold">Live Queue ({queue.length})</h2>
              <div className="flex items-center gap-2">
+               <span className="text-xs bg-gray-700 text-gray-200 px-2 py-1 rounded border border-gray-600">
+                 Total in list: {queue.length}
+               </span>
                {adminPassword && (
                  <button
                    onClick={handleClearAll}
