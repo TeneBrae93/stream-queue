@@ -93,6 +93,23 @@ export default function Home() {
     }
     // If successful, the Supabase real-time subscription will automatically remove them from the screen!
   };
+  const handleSetPriority = async (id: string) => {
+    if (!adminPassword) return;
+
+    const res = await fetch('/api/priority', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, password: adminPassword })
+    });
+
+    if (res.status === 401) {
+      alert("Wrong password!");
+      setAdminPassword(null); // Kick them out of admin mode
+    } else if (!res.ok) {
+      alert("Something went wrong setting priority.");
+    }
+    // If successful, the realtime subscription will re-order the queue automatically.
+  };
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-10 font-sans flex flex-col justify-between">
@@ -170,13 +187,24 @@ export default function Home() {
                 {/* Admin Remove Button */}
                 {adminPassword && (
                   <div className="ml-4 flex items-center border-l border-gray-600 pl-4">
-                    <button 
-                      onClick={() => handleRemove(user.id)}
-                      className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-3 rounded transition"
-                      title="Remove from queue"
-                    >
-                      X
-                    </button>
+                    <div className="flex flex-col gap-2">
+                      {!user.is_priority && (
+                        <button
+                          onClick={() => handleSetPriority(user.id)}
+                          className="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-2 px-3 rounded transition"
+                          title="Manually set this user to priority"
+                        >
+                          Priority
+                        </button>
+                      )}
+                      <button 
+                        onClick={() => handleRemove(user.id)}
+                        className="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-3 rounded transition"
+                        title="Remove from queue"
+                      >
+                        X
+                      </button>
+                    </div>
                   </div>
                 )}
 
