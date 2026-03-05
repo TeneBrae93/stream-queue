@@ -94,6 +94,27 @@ export default function Home() {
     // If successful, the Supabase real-time subscription will automatically remove them from the screen!
   };
 
+  const handleClearAll = async () => {
+    if (!adminPassword) return;
+
+    const confirmed = window.confirm('Are you sure you want to clear all entries from the queue?');
+    if (!confirmed) return;
+
+    const res = await fetch('/api/remove-all', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: adminPassword })
+    });
+
+    if (res.status === 401) {
+      alert('Wrong password!');
+      setAdminPassword(null);
+    } else if (!res.ok) {
+      alert('Something went wrong clearing the queue.');
+    }
+    // On success, real-time updates will refresh the queue automatically.
+  };
+
   return (
     <div className="min-h-screen bg-gray-900 text-white p-10 font-sans flex flex-col justify-between">
       
@@ -147,7 +168,19 @@ export default function Home() {
         <div className="bg-gray-800 p-6 rounded-lg shadow-lg h-fit">
           <div className="flex justify-between items-center mb-4">
              <h2 className="text-2xl font-bold">Live Queue</h2>
-             {adminPassword && <span className="text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded border border-red-500">Admin Mode Active</span>}
+             <div className="flex items-center gap-2">
+               {adminPassword && (
+                 <button
+                   onClick={handleClearAll}
+                   disabled={queue.length === 0}
+                   className="bg-red-700 hover:bg-red-600 disabled:bg-red-900/40 disabled:text-red-200/40 disabled:cursor-not-allowed text-white text-xs font-bold px-3 py-1 rounded border border-red-500 transition"
+                   title="Clear all queue entries"
+                 >
+                   Clear All
+                 </button>
+               )}
+               {adminPassword && <span className="text-xs bg-red-500/20 text-red-400 px-2 py-1 rounded border border-red-500">Admin Mode Active</span>}
+             </div>
           </div>
           
           <div className="flex flex-col gap-3">
