@@ -17,6 +17,10 @@ Features
 
 -   **Hidden Admin Mode:** Secret passcode login on the frontend to manage and remove completed reviews.
 
+-   **Dual Submission Modes:** Admins can switch between review mode (name + links) and question mode (name + question text) without redeploying.
+
+-   **Duplicate Blocking (Active Queue):** New submissions are blocked if the same name or same primary value is already waiting in the queue.
+
 -   **Free to Host:** Designed to run entirely on the free tiers of Vercel and Supabase.
 
 * * * * *
@@ -98,3 +102,23 @@ To enable the automatic "Jump the Line" feature, you need to tell Ko-fi to talk 
 3.  Enter the `ADMIN_PASSWORD` you set in Vercel.
 
 4.  Red "X" buttons will appear next to everyone's name, allowing you to remove them as you finish their reviews on stream. 
+5.  Use the admin controls to switch between **Review Mode** and **Question Mode** for new submissions.
+
+  -   **Review Mode:** viewers submit their name plus links.
+  -   **Question Mode:** viewers submit their name plus a question text box.
+  -   Mode changes only affect new submissions. Existing queue entries continue displaying in the format they were submitted with.
+
+### Notes on Data Storage
+
+-   This project reuses the existing `url1` field to store question text when Question Mode is active.
+-   Question-mode entries are tagged internally so the UI can render them as question text instead of links.
+
+### Duplicate Submission Rules
+
+-   Duplicate checks only apply to records currently in `status = 'waiting'`.
+-   A new submission is blocked if either condition is true:
+  -   The same name/handle is already waiting.
+  -   The same primary value is already waiting (`url1`, which is link in review mode and question text in question mode).
+-   Matching is case-insensitive.
+-   Review-mode links are normalized for comparison (protocol and trailing slash differences are treated as the same link).
+-   Once a submission is removed or the queue is cleared, that name/link/question can be submitted again.

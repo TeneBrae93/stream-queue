@@ -3,6 +3,9 @@ import { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import Image from 'next/image'; // <-- NEW: Imported Next.js Image component
 
+type SubmissionMode = 'review' | 'question';
+const QUESTION_ENTRY_MARKER = '__question_mode_entry__';
+
 interface QueueItem {
   id: string;
   name: string;
@@ -18,6 +21,7 @@ interface FormData {
   url1: string;
   url2: string;
   url3: string;
+  question: string;
 }
 
 const supabase = createClient(
@@ -28,9 +32,10 @@ const ASSIGNED_CODE_STORAGE_KEY = 'stream_queue_assigned_code';
 
 export default function Home() {
   const [queue, setQueue] = useState<QueueItem[]>([]);
-  const [formData, setFormData] = useState<FormData>({ name: '', url1: '', url2: '', url3: '' });
+  const [formData, setFormData] = useState<FormData>({ name: '', url1: '', url2: '', url3: '', question: '' });
   const [assignedCode, setAssignedCode] = useState<string | null>(null);
   const [submissionsOpen, setSubmissionsOpen] = useState(true);
+  const [submissionMode, setSubmissionMode] = useState<SubmissionMode>('review');
   
   // New Admin State
   const [adminPassword, setAdminPassword] = useState<string | null>(null);
@@ -75,10 +80,12 @@ export default function Home() {
     try {
       const res = await fetch('/api/submissions');
       if (!res.ok) throw new Error('Failed to load submission setting');
-      const data: { submissionsOpen: boolean } = await res.json();
+      const data: { submissionsOpen: boolean; submissionMode?: SubmissionMode } = await res.json();
       setSubmissionsOpen(data.submissionsOpen);
+      setSubmissionMode(data.submissionMode === 'question' ? 'question' : 'review');
     } catch {
       setSubmissionsOpen(true);
+      setSubmissionMode('review');
     }
   };
 
@@ -90,20 +97,58 @@ export default function Home() {
       return;
     }
 
-    const shortId = Math.floor(1000 + Math.random() * 9000).toString();
-    
-    const { error } = await supabase.from('queue').insert([{ 
-      name: formData.name, 
-      url1: formData.url1, 
-      url2: formData.url2, 
-      url3: formData.url3, 
-      short_id: shortId 
-    }]);
-
-    if (!error) {
-      setAssignedCode(shortId);
-      setFormData({ name: '', url1: '', url2: '', url3: '' });
+    const cleanedName = formData.name.trim();
+    if (!cleanedName) {
+      alert('Please enter your name or handle.');
+      return;
     }
+
+    if (submissionMode === 'review' && !formData.url1.trim()) {
+      alert('Please add at least one link.');
+      return;
+    }
+
+    if (submissionMode === 'question' && !formData.question.trim()) {
+      alert('Please enter your question.');
+      return;
+    }
+
+    const payload = submissionMode === 'question'
+      ? {
+          name: cleanedName,
+          url1: formData.question.trim(),
+          url2: '',
+          url3: QUESTION_ENTRY_MARKER,
+          submissionMode,
+        }
+      : {
+          name: cleanedName,
+          url1: formData.url1.trim(),
+          url2: formData.url2.trim(),
+          url3: formData.url3.trim(),
+          submissionMode,
+        };
+
+    const res = await fetch('/api/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    const responseBody = await res.json().catch(() => ({}));
+
+    if (res.status === 409) {
+      alert(responseBody.error ?? 'This submission is already in the queue.');
+      return;
+    }
+
+    if (!res.ok) {
+      alert(responseBody.error ?? 'Something went wrong submitting your entry.');
+      return;
+    }
+
+    setAssignedCode(responseBody.shortId ?? null);
+    setFormData({ name: '', url1: '', url2: '', url3: '', question: '' });
   };
 
   // --- NEW: Handle Admin Unlock ---
@@ -192,6 +237,30 @@ export default function Home() {
     setSubmissionsOpen(nextState);
   };
 
+  const handleToggleSubmissionMode = async () => {
+    if (!adminPassword) return;
+
+    const nextMode: SubmissionMode = submissionMode === 'review' ? 'question' : 'review';
+    const res = await fetch('/api/submissions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: adminPassword, submissionMode: nextMode }),
+    });
+
+    if (res.status === 401) {
+      alert('Wrong password!');
+      setAdminPassword(null);
+      return;
+    }
+
+    if (!res.ok) {
+      alert('Unable to update submission mode.');
+      return;
+    }
+
+    setSubmissionMode(nextMode);
+  };
+
   return (
     <div className="min-h-screen bg-gray-900 text-white p-10 font-sans flex flex-col justify-between">
       
@@ -223,6 +292,9 @@ export default function Home() {
         {/* Submission Form */}
         <div className="bg-gray-800 p-6 rounded-lg shadow-lg h-fit">
           <h2 className="text-2xl font-bold mb-4">Submit</h2>
+          <p className="text-xs uppercase tracking-wide text-gray-400 mb-4">
+            Current mode: <span className="font-semibold text-white">{submissionMode === 'review' ? 'Review Mode' : 'Question Mode'}</span>
+          </p>
           {assignedCode ? (
             <div className="bg-green-600/20 border border-green-500 p-4 rounded text-center">
               <h3 className="text-xl font-bold text-green-400">You are in the queue!</h3>
@@ -238,9 +310,21 @@ export default function Home() {
           ) : (
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
               <input required placeholder="Your Name / Handle" className="p-2 bg-gray-700 rounded text-white" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
-              <input required placeholder="URL 1 (LinkedIn, GitHub, etc)" className="p-2 bg-gray-700 rounded text-white" value={formData.url1} onChange={e => setFormData({...formData, url1: e.target.value})} />
-              <input placeholder="URL 2 (Optional)" className="p-2 bg-gray-700 rounded text-white" value={formData.url2} onChange={e => setFormData({...formData, url2: e.target.value})} />
-              <input placeholder="URL 3 (Optional)" className="p-2 bg-gray-700 rounded text-white" value={formData.url3} onChange={e => setFormData({...formData, url3: e.target.value})} />
+              {submissionMode === 'review' ? (
+                <>
+                  <input required placeholder="URL 1 (LinkedIn, GitHub, etc)" className="p-2 bg-gray-700 rounded text-white" value={formData.url1} onChange={e => setFormData({...formData, url1: e.target.value})} />
+                  <input placeholder="URL 2 (Optional)" className="p-2 bg-gray-700 rounded text-white" value={formData.url2} onChange={e => setFormData({...formData, url2: e.target.value})} />
+                  <input placeholder="URL 3 (Optional)" className="p-2 bg-gray-700 rounded text-white" value={formData.url3} onChange={e => setFormData({...formData, url3: e.target.value})} />
+                </>
+              ) : (
+                <textarea
+                  required
+                  placeholder="Your question"
+                  className="p-2 bg-gray-700 rounded text-white min-h-28"
+                  value={formData.question}
+                  onChange={e => setFormData({...formData, question: e.target.value})}
+                />
+              )}
               <button type="submit" className="bg-blue-600 hover:bg-blue-500 font-bold p-3 rounded transition mt-2">Join Queue</button>
             </form>
           )}
@@ -253,6 +337,12 @@ export default function Home() {
               <h3 className="text-base font-bold uppercase tracking-wide text-red-300">Admin Controls</h3>
               <p className="text-sm text-gray-300 mt-1">Manage queue actions and future admin settings.</p>
               <div className="mt-4 flex flex-wrap items-center gap-3">
+                <button
+                  onClick={handleToggleSubmissionMode}
+                  className="text-xs font-bold px-3 py-1 rounded border transition bg-cyan-500/20 text-cyan-300 border-cyan-500 hover:bg-cyan-500/30"
+                >
+                  {submissionMode === 'review' ? 'Switch To Question Mode' : 'Switch To Review Mode'}
+                </button>
                 <button
                   onClick={handleToggleSubmissions}
                   className={`text-xs font-bold px-3 py-1 rounded border transition ${submissionsOpen ? 'bg-amber-500/20 text-amber-300 border-amber-500 hover:bg-amber-500/30' : 'bg-green-500/20 text-green-300 border-green-500 hover:bg-green-500/30'}`}
@@ -285,6 +375,9 @@ export default function Home() {
             <div className="flex flex-col gap-3">
               {queue.length === 0 && <p className="text-gray-400 italic">Queue is empty. Be the first!</p>}
               {queue.map((user, index) => (
+                (() => {
+                  const isQuestionEntry = user.url3 === QUESTION_ENTRY_MARKER;
+                  return (
                 <div key={user.id} className={`p-4 rounded border flex items-stretch ${user.is_priority ? 'bg-yellow-500/10 border-yellow-500' : 'bg-gray-700 border-gray-600'}`}>
 
                   <div className="flex-1 min-w-0 pr-3">
@@ -303,11 +396,15 @@ export default function Home() {
                         {user.is_priority && <span className="text-xs bg-yellow-500 text-black px-2 py-1 font-black rounded uppercase tracking-wider">Priority</span>}
                       </div>
                     </div>
-                    <div className="text-sm text-blue-400 mt-2 flex flex-col gap-1 overflow-hidden">
-                      <a href={user.url1} target="_blank" rel="noreferrer" className="truncate hover:underline">{user.url1}</a>
-                      {user.url2 && <a href={user.url2} target="_blank" rel="noreferrer" className="truncate hover:underline">{user.url2}</a>}
-                      {user.url3 && <a href={user.url3} target="_blank" rel="noreferrer" className="truncate hover:underline">{user.url3}</a>}
-                    </div>
+                    {isQuestionEntry ? (
+                      <div className="text-sm text-gray-100 mt-2 whitespace-pre-wrap break-words">{user.url1}</div>
+                    ) : (
+                      <div className="text-sm text-blue-400 mt-2 flex flex-col gap-1 overflow-hidden">
+                        <a href={user.url1} target="_blank" rel="noreferrer" className="truncate hover:underline">{user.url1}</a>
+                        {user.url2 && <a href={user.url2} target="_blank" rel="noreferrer" className="truncate hover:underline">{user.url2}</a>}
+                        {user.url3 && <a href={user.url3} target="_blank" rel="noreferrer" className="truncate hover:underline">{user.url3}</a>}
+                      </div>
+                    )}
                   </div>
 
                   {/* Admin Remove Button */}
@@ -335,6 +432,8 @@ export default function Home() {
                   )}
 
                 </div>
+                  );
+                })()
               ))}
             </div>
           </div>
